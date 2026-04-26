@@ -1,0 +1,28 @@
+{
+  "name": "prix-onboarding",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node src/setup/clickhouse.js",
+    "setup:pg": "node src/setup/postgres.js",
+    "ingest:dengue": "node src/ingest/dengue.js",
+    "ingest:cnes": "node src/ingest/cnes.js",
+    "ingest:municipios": "node src/ingest/municipios.js",
+    "ingest:geo": "node src/ingest/geo-municipios.js",
+    "ingest:all": "node src/ingest/all.js",
+    "dev": "node src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@clickhouse/client": "^1.18.2",
+    "csv-parser": "^3.2.0",
+    "dbffile": "^1.12.0",
+    "express": "^5.2.1",
+    "pg": "^8.20.0",
+    "shapefile": "^0.6.6"
+  }
+}

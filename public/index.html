@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prix Onboarding — Visualização de Mapas</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f6fa; color: #333; }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 24px; background: #fff; border-bottom: 2px solid #e0e0e0;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .header h1 { font-size: 18px; color: #e94560; }
+    .controls { display: flex; gap: 6px; align-items: center; }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      padding: 8px 16px; border: none; border-radius: 6px 6px 0 0;
+      cursor: pointer; font-size: 13px; font-weight: 600;
+      background: #e8eaf0; color: #666; transition: all 0.2s;
+    }
+    .tab:hover { color: #333; background: #dce0e8; }
+    .tab.active { background: #e94560; color: #fff; }
+    select {
+      padding: 6px 10px; border-radius: 4px; border: 1px solid #ccc;
+      background: #fff; color: #333; font-size: 13px;
+    }
+    /* ─── Filtros estilizados ─── */
+    .filter-group {
+      display: flex; align-items: center; gap: 6px;
+      background: #f5f6fa; border-radius: 8px; padding: 5px 12px;
+      border: 1px solid #e0e0e0;
+    }
+    .filter-group .filter-icon { font-size: 14px; color: #999; }
+    .filter-group .filter-label {
+      font-size: 11px; color: #999; text-transform: uppercase;
+      letter-spacing: 0.5px; font-weight: 600;
+    }
+    .filter-group select {
+      border: none; background: transparent; font-size: 13px;
+      color: #333; font-weight: 500; padding: 4px 6px; cursor: pointer;
+    }
+    .filter-group select:focus { outline: none; }
+    .filter-sep { width: 1px; height: 24px; background: #ddd; margin: 0 4px; }
+    .map-container { position: relative; width: 100%; height: calc(100vh - 52px); }
+    .map-panel {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: none;
+    }
+    .map-panel.active { display: flex; }
+    .map-wrapper { flex: 1; position: relative; height: 100%; }
+    #map-mapbox, #map-leaflet, #map-google { width: 100%; height: 100%; }
+
+    /* ─── Painel de Insights lateral ─── */
+    .insights-panel {
+      width: 320px; height: 100%; overflow-y: auto; background: #fff;
+      border-left: 2px solid #e0e0e0; padding: 16px; flex-shrink: 0;
+    }
+    .insights-panel h3 {
+      font-size: 13px; color: #e94560; margin-bottom: 12px;
+      padding-bottom: 6px; border-bottom: 1px solid #eee;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .insights-panel .insight-card { margin-bottom: 10px; }
+    .insights-panel .insight-card h4 { font-size: 13px; font-weight: 700; color: #222; }
+    .insights-panel .insight-card .insight-value {
+      font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .insights-panel .insight-card p { font-size: 12px; color: #555; }
+    .insights-panel .mini-kpi {
+      display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .insights-panel .mini-kpi-item {
+      flex: 1; min-width: 90px; background: #f5f6fa; border-radius: 6px;
+      padding: 10px; text-align: center;
+    }
+    .insights-panel .mini-kpi-item .val {
+      font-size: 18px; font-weight: 800; color: #222; letter-spacing: -0.5px;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .insights-panel .mini-kpi-item .lbl {
+      font-size: 10px; color: #666; margin-top: 2px; text-transform: uppercase; font-weight: 600;
+    }
+    .insights-panel .mini-bar {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+    }
+    .insights-panel .mini-bar-label {
+      width: 75px; font-size: 12px; color: #222; font-weight: 600; text-align: right; flex-shrink: 0;
+    }
+    .insights-panel .mini-bar-track {
+      flex: 1; height: 16px; background: #e8eaf0; border-radius: 3px; overflow: hidden;
+    }
+    .insights-panel .mini-bar-fill {
+      height: 100%; border-radius: 3px; display: flex; align-items: center;
+      padding-left: 6px; font-size: 11px; color: #fff; font-weight: 700;
+      white-space: nowrap; transition: width 0.5s ease;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .map-label {
+      position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+      background: rgba(255,255,255,0.92); padding: 8px 14px;
+      border-radius: 6px; font-size: 12px; color: #666;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+    .map-label b { color: #e94560; }
+
+    /* ─── Tendência / Variação badges ─── */
+    .trend-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    }
+    .trend-badge.up { background: rgba(231,76,60,0.12); color: #e74c3c; }
+    .trend-badge.down { background: rgba(39,174,96,0.12); color: #27ae60; }
+    .trend-badge.neutral { background: rgba(149,165,166,0.15); color: #95a5a6; }
+    .variation-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid #f0f0f0;
+    }
+    .variation-row:last-child { border-bottom: none; }
+    .variation-row .vr-label { font-size: 12px; color: #333; font-weight: 600; }
+    .variation-row .vr-values { display: flex; align-items: center; gap: 8px; }
+    .variation-row .vr-val { font-size: 14px; font-weight: 800; color: #222; }
+    .progress-bar-mini {
+      width: 60px; height: 6px; background: #e8eaf0; border-radius: 3px; overflow: hidden;
+    }
+    .progress-bar-mini .pb-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+
+    /* ─── Legendas ─── */
+    .legend {
+      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(255,255,255,0.95); padding: 12px 16px;
+      border-radius: 8px; font-size: 11px; color: #555;
+      max-width: 200px; box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+    }
+    .legend h4 { font-size: 12px; color: #e94560; margin-bottom: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .legend-color {
+      width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+    }
+    .legend-circle {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid;
+    }
+    .legend-gradient {
+      width: 100%; height: 12px; border-radius: 3px; margin: 4px 0;
+    }
+    .legend-labels { display: flex; justify-content: space-between; font-size: 10px; color: #999; }
+
+    /* ─── Dashboard ─── */
+    #panel-dashboard {
+      background: #f5f6fa; flex-direction: column;
+    }
+    .dash-totals {
+      display: flex; gap: 0; background: #fff; border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .total-item {
+      flex: 1; padding: 18px 20px; text-align: center;
+      border-right: 1px solid #f0f0f0;
+    }
+    .total-item:last-child { border-right: none; }
+    .total-item .total-val { font-size: 26px; font-weight: 700; color: #333; }
+    .total-item .total-lbl { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+    .total-item.accent .total-val { color: #e94560; }
+    .total-item.warn .total-val { color: #e67e22; }
+    .total-item.danger .total-val { color: #e74c3c; }
+    .total-item.info .total-val { color: #3498db; }
+    .total-item.green .total-val { color: #27ae60; }
+
+    .classif-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px; margin-bottom: 4px;
+    }
+    .classif-card {
+      background: #fff; border-radius: 8px; padding: 14px 16px;
+      border-left: 4px solid #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .classif-card .cc-val { font-size: 22px; font-weight: 700; color: #333; }
+    .classif-card .cc-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+    .classif-card .cc-pct { font-size: 11px; color: #aaa; font-weight: 600; }
+
+    .dash-section { margin-bottom: 24px; padding-top: 16px; }
+    .dash-section h3 {
+      font-size: 14px; color: #555; margin-bottom: 12px;
+      padding-bottom: 6px; border-bottom: 1px solid #eee;
+      font-weight: 600;
+    }
+
+    .chart-container {
+      background: #fff; border-radius: 10px; padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    /* Chart.js canvas containers */
+    .chart-container canvas { width: 100% !important; max-height: 320px; }
+    .bar-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .bar-label { width: 110px; font-size: 12px; color: #666; text-align: right; flex-shrink: 0; }
+    .bar-track {
+      flex: 1; height: 22px; background: #e8eaf0; border-radius: 4px; overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 4px; transition: width 0.6s ease;
+      display: flex; align-items: center; padding-left: 8px;
+      font-size: 11px; color: #fff; font-weight: 600; white-space: nowrap;
+    }
+    .bar-fill span { }
+
+    .insight-card {
+      background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 12px;
+      border-left: 4px solid #3498db;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .insight-card h4 { font-size: 13px; color: #222; margin-bottom: 6px; font-weight: 700; }
+    .insight-card p { font-size: 12px; color: #555; line-height: 1.5; }
+    .insight-card .insight-value {
+      font-size: 22px; font-weight: 800; color: #3498db; letter-spacing: -0.5px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .insight-card.warn { border-left-color: #e67e22; }
+    .insight-card.warn .insight-value { color: #e67e22; }
+    .insight-card.danger { border-left-color: #e74c3c; }
+    .insight-card.danger .insight-value { color: #e74c3c; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Prix Onboarding</h1>
+  <div class="controls">
+    <div class="filter-group" id="filter-onde">
+      <span class="filter-icon">&#128205;</span>
+      <span class="filter-label">De onde</span>
+      <div class="filter-sep"></div>
+      <select id="regiao-select">
+        <option value="">Todas as regioes</option>
+        <option value="norte">Norte</option>
+        <option value="nordeste">Nordeste</option>
+        <option value="centro-oeste">Centro-Oeste</option>
+        <option value="sudeste">Sudeste</option>
+        <option value="sul">Sul</option>
+      </select>
+      <div class="filter-sep"></div>
+      <select id="uf-select">
+        <option value="">Todos os estados</option>
+        <option value="AC">AC</option><option value="AL">AL</option>
+        <option value="AM">AM</option><option value="AP">AP</option>
+        <option value="BA">BA</option><option value="CE">CE</option>
+        <option value="DF">DF</option><option value="ES">ES</option>
+        <option value="GO">GO</option><option value="MA">MA</option>
+        <option value="MG">MG</option><option value="MS">MS</option>
+        <option value="MT">MT</option><option value="PA">PA</option>
+        <option value="PB">PB</option><option value="PE">PE</option>
+        <option value="PI">PI</option><option value="PR">PR</option>
+        <option value="RJ">RJ</option><option value="RN">RN</option>
+        <option value="RO">RO</option><option value="RR">RR</option>
+        <option value="RS">RS</option><option value="SC">SC</option>
+        <option value="SE">SE</option><option value="SP">SP</option>
+        <option value="TO">TO</option>
+      </select>
+    </div>
+    <div class="filter-group" id="filter-quando">
+      <span class="filter-icon">&#128197;</span>
+      <span class="filter-label">Quando</span>
+      <div class="filter-sep"></div>
+      <select id="periodo-select">
+        <option value="">Todo o periodo</option>
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2026-Q1">2026 — Jan a Mar</option>
+        <option value="2025-Q1">2025 — Jan a Mar</option>
+        <option value="2025-Q2">2025 — Abr a Jun</option>
+        <option value="2025-Q3">2025 — Jul a Set</option>
+        <option value="2025-Q4">2025 — Out a Dez</option>
+      </select>
+    </div>
+    <div class="tabs">
+      <button class="tab" data-provider="dashboard">Dashboard</button>
+      <button class="tab" data-provider="leaflet">OpenStreetMap</button>
+      <button class="tab active" data-provider="mapbox">Mapbox</button>
+      <button class="tab" data-provider="google">Google Maps</button>
+    </div>
+  </div>
+</div>
+
+<div class="map-container">
+  <!-- DASHBOARD -->
+  <div id="panel-dashboard" class="map-panel">
+    <!-- Totalizadores -->
+    <div class="dash-totals" id="dash-totals"></div>
+
+    <div style="flex:1;overflow-y:auto;padding:0 24px 24px">
+      <!-- Classificação dos casos (agrupamento por setor) -->
+      <div class="dash-section">
+        <h3>Classificação dos casos de dengue</h3>
+        <p style="color:#666;font-size:11px;margin:-4px 0 12px">Cada caso notificado recebe uma classificação final após investigação epidemiológica.</p>
+        <div class="classif-grid" id="dash-classif"></div>
+        <div class="chart-container" style="margin-top:12px">
+          <div id="chart-classif-bar"></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- Classificação (doughnut) -->
+        <div class="dash-section">
+          <h3>Distribuição por classificação</h3>
+          <div class="chart-container"><canvas id="chart-classif-donut"></canvas></div>
+        </div>
+        <!-- Casos por tipo de unidade -->
+        <div class="dash-section">
+          <h3>Casos de dengue por tipo de unidade</h3>
+          <div class="chart-container"><canvas id="chart-casos-unidade"></canvas></div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-top:16px">
+        <!-- Evolução mensal (line chart) -->
+        <div class="dash-section">
+          <h3>Evolução mensal de casos</h3>
+          <div class="chart-container"><canvas id="chart-mensal"></canvas></div>
+        </div>
+        <!-- Hospitalizações vs Óbitos mensal (stacked bar) -->
+        <div class="dash-section">
+          <h3>Hospitalizações e óbitos por mês</h3>
+          <div class="chart-container"><canvas id="chart-hosp-obitos"></canvas></div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-top:16px">
+        <!-- Top estados (horizontal bar) -->
+        <div class="dash-section">
+          <h3>Top 10 estados com mais casos</h3>
+          <div class="chart-container"><canvas id="chart-estados"></canvas></div>
+        </div>
+        <!-- Faixa etária (bar vertical) -->
+        <div class="dash-section">
+          <h3>Distribuicao por faixa etaria</h3>
+          <div class="chart-container"><canvas id="chart-idade"></canvas></div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-top:16px">
+        <!-- Estabelecimentos ativos por tipo -->
+        <div class="dash-section">
+          <h3>Estabelecimentos ativos por tipo</h3>
+          <div class="chart-container"><canvas id="chart-tipos"></canvas></div>
+        </div>
+        <!-- Comparativo 2025 vs 2026 -->
+        <div class="dash-section">
+          <h3>Comparativo — 2025 vs 2026</h3>
+          <div class="chart-container"><canvas id="chart-comparativo"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEAFLET -->
+  <div id="panel-leaflet" class="map-panel">
+    <div class="map-wrapper">
+      <div id="map-leaflet"></div>
+      <div class="map-label"><b>OpenStreetMap / Leaflet</b> — Estabelecimentos de saude + Limites</div>
+      <div class="legend">
+        <h4>Estabelecimentos</h4>
+        <div class="legend-item">
+          <div class="legend-circle" style="background:#00d2ff;border-color:#00d2ff"></div>
+          Unidade de saude ativa
+        </div>
+        <div class="legend-item" style="margin-top:8px">
+          <div class="legend-color" style="background:#FFD700;opacity:0.6"></div>
+          Outline da região (Turf.js)
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background:#e94560;opacity:0.6"></div>
+          Limites estaduais
+        </div>
+      </div>
+    </div>
+    <div class="insights-panel" id="insights-leaflet"></div>
+  </div>
+
+  <!-- MAPBOX -->
+  <div id="panel-mapbox" class="map-panel active">
+    <div class="map-wrapper">
+      <div id="map-mapbox"></div>
+      <div class="map-label"><b>Mapbox GL JS</b> — Clustering de casos de dengue</div>
+      <div class="legend">
+        <h4>Clusters de casos</h4>
+        <div class="legend-item"><div class="legend-color" style="background:#51bbd6"></div> &lt; 50</div>
+        <div class="legend-item"><div class="legend-color" style="background:#FEB24C"></div> 200 — 1k</div>
+        <div class="legend-item"><div class="legend-color" style="background:#FC4E2A"></div> 5k — 20k</div>
+        <div class="legend-item"><div class="legend-color" style="background:#800026"></div> &gt; 100k</div>
+        <div style="margin-top:10px"><h4>Intensidade por estado</h4></div>
+        <div class="legend-gradient" style="background:linear-gradient(to right, rgba(200,230,200,0.8), rgba(255,255,178,0.9), rgba(254,204,92,1), rgba(253,141,60,1), rgba(240,59,32,1), rgba(189,0,38,1))"></div>
+        <div class="legend-labels"><span>Baixa</span><span>Media</span><span>Alta</span></div>
+        <div style="margin-top:8px">
+          <div class="legend-item">
+            <div class="legend-color" style="background:#FFD700;opacity:0.6"></div>
+            Outline da região
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background:#e94560;opacity:0.6"></div>
+            Limites estaduais
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="insights-panel" id="insights-mapbox"></div>
+  </div>
+
+  <!-- GOOGLE -->
+  <div id="panel-google" class="map-panel">
+    <div class="map-wrapper">
+      <div id="map-google"></div>
+      <div class="map-label"><b>Google Maps</b> — Heatmap de dengue + Limites</div>
+      <div class="legend">
+        <h4>Heatmap — Intensidade</h4>
+        <div class="legend-gradient" style="background:linear-gradient(to right, rgba(255,255,178,0.8), rgba(254,204,92,0.9), rgba(253,141,60,1), rgba(240,59,32,1), rgba(189,0,38,1))"></div>
+        <div class="legend-labels"><span>Baixa</span><span>Media</span><span>Alta</span></div>
+        <div style="margin-top:10px">
+          <div class="legend-item">
+            <div class="legend-color" style="background:#e94560;opacity:0.6"></div>
+            Limites estaduais
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="insights-panel" id="insights-google"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+<script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<script>
+// ─── Config ───
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoicm9nZW5pcyIsImEiOiJjbW82ajhvamUyMTg5MnFwenV5emZzZW9xIn0.v12563U26E0Y9nWvKzUjYQ';
+const GOOGLE_KEY = 'AIzaSyAKMOo9I8VKI1Xn21XBAedfkPGXuHIbeOI';
+
+// ─── Mapeamento de tipos de estabelecimento (CNES) ───
+const TIPOS_UNIDADE = {
+  1: 'Posto de Saúde',
+  2: 'Centro de Saúde/Unidade Básica',
+  4: 'Policlínica',
+  5: 'Hospital Geral',
+  7: 'Hospital Especializado',
+  15: 'Unidade Mista',
+  16: 'Unidade Mista (Prev. Especial)',
+  20: 'Pronto Socorro Geral',
+  21: 'Pronto Socorro Especializado',
+  22: 'Consultório Isolado',
+  32: 'Unidade Móvel Fluvial',
+  36: 'Clínica/Centro de Especialidade',
+  39: 'Unidade de Apoio Diagnose e Terapia',
+  40: 'Unidade Móvel Terrestre',
+  42: 'Unidade Móvel de Nível Pré-hosp.',
+  43: 'Farmácia',
+  50: 'Unidade de Vigilância em Saúde',
+  60: 'Cooperativa ou Empresa de Cessão',
+  61: 'Centro de Parto Normal',
+  62: 'Hospital/Dia — Isolado',
+  64: 'Central de Regulação de Serviços',
+  67: 'Laboratório de Saúde Pública',
+  68: 'Central de Regulação Médica',
+  69: 'Centro de Atenção Hemoterapia',
+  70: 'Centro de Atenção Psicossocial',
+  71: 'Centro de Apoio à Saúde da Família',
+  72: 'Unidade de Atenção à Saúde Indígena',
+  73: 'Pronto Atendimento',
+  74: 'Polo Academia da Saúde',
+  75: 'Telessaúde',
+  76: 'Central de Regulação',
+  77: 'Serviço de Atenção Domiciliar',
+  78: 'Unidade de Atenção em Regime Resid.',
+  79: 'Oficina Ortopédica',
+  80: 'Laboratório de Prótese Dentária',
+  81: 'Central de Abastecimento',
+  82: 'Central de Mistura/Quimioterapia',
+  83: 'Polo de Prevenção de Doenças',
+  84: 'Centro de Referência em Saúde',
+  85: 'Centro de Referência em Saúde do Trabalhador',
+};
+
+function getTipoUnidade(code) {
+  return TIPOS_UNIDADE[code] || 'Tipo ' + code;
+}
+
+function fmt(n) {
+  return Number(n).toLocaleString('pt-BR');
+}
+
+const CLASSIF_LABELS = {
+  dengue: 'Dengue',
+  dengue_com_alarme: 'Dengue c/ alarme',
+  dengue_grave: 'Dengue grave',
+  descartado: 'Descartado',
+  inconclusivo: 'Inconclusivo',
+  sem_classificacao: 'Sem classificação',
+};
+
+const CLASSIF_COLORS = {
+  dengue: '#51bbd6',
+  dengue_com_alarme: '#FEB24C',
+  dengue_grave: '#E31A1C',
+  descartado: '#2ecc71',
+  inconclusivo: '#aaa',
+  sem_classificacao: '#555',
+};
+
+// ─── State ───
+let currentProvider = 'mapbox';
+let currentUf = '';
+let currentRegiao = '';
+let currentPeriodo = '';
+let regiaoGeoJson = null;
+let dashboardLoaded = false;
+
+const REGIAO_LABELS = { norte: 'Norte', nordeste: 'Nordeste', 'centro-oeste': 'Centro-Oeste', sudeste: 'Sudeste', sul: 'Sul' };
+
+// ─── Build API query string from active filters ───
+function filterQs() {
+  const params = [];
+  if (currentUf) params.push('uf=' + currentUf);
+  else if (currentRegiao) params.push('regiao=' + currentRegiao);
+  if (currentPeriodo) params.push('periodo=' + currentPeriodo);
+  return params.length ? '?' + params.join('&') : '';
+}
+
+// ═══════════════════════════════════════
+// DASHBOARD + INSIGHTS (painéis laterais dos mapas)
+// ═══════════════════════════════════════
+
+function trendBadge(val, prev, label) {
+  if (!prev || prev === 0) return '<span class="trend-badge neutral">--</span>';
+  const pct = ((val - prev) / prev * 100).toFixed(0);
+  const cls = pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral';
+  const arrow = pct > 0 ? '&#9650;' : pct < 0 ? '&#9660;' : '&#9654;';
+  return '<span class="trend-badge ' + cls + '">' + arrow + ' ' + (pct > 0 ? '+' : '') + pct + '%</span>';
+}
+
+function variationRow(label, val, prev, maxVal, color) {
+  const pct = maxVal > 0 ? (val / maxVal * 100).toFixed(0) : 0;
+  return '<div class="variation-row">' +
+    '<div class="vr-label">' + label + '</div>' +
+    '<div class="vr-values">' +
+      '<div class="vr-val">' + fmt(val) + '</div>' +
+      '<div class="progress-bar-mini"><div class="pb-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+      trendBadge(val, prev, label) +
+    '</div></div>';
+}
+
+async function loadInsights() {
+  try {
+  const qs = filterQs();
+  const filterLabel = currentUf ? 'UF: ' + currentUf
+    : currentRegiao ? 'Regiao: ' + (REGIAO_LABELS[currentRegiao] || currentRegiao)
+    : 'Brasil';
+
+  const [resumo, mensal, estados, tipos, comparativo] = await Promise.all([
+    fetch('/api/dashboard/resumo' + qs).then(r => r.json()),
+    fetch('/api/dashboard/mensal' + qs).then(r => r.json()),
+    fetch('/api/dashboard/top-estados' + qs).then(r => r.json()),
+    fetch('/api/dashboard/tipos-estabelecimento' + qs).then(r => r.json()),
+    fetch('/api/dashboard/comparativo-anual' + qs).then(r => r.json()),
+  ]);
+
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const totalCasos = Number(resumo.total_casos) || 0;
+  const topEstado = estados[0];
+  const picoMes = mensal.length ? mensal.reduce((a, b) => Number(a.casos) > Number(b.casos) ? a : b) : null;
+  const picoDate = picoMes ? new Date(picoMes.mes) : null;
+  const picoLabel = picoDate ? meses[picoDate.getMonth()] + '/' + picoDate.getFullYear() : '-';
+  const letalidade = totalCasos ? (Number(resumo.obitos) / totalCasos * 100).toFixed(3) : '0';
+  const hospRate = totalCasos ? (Number(resumo.hospitalizacoes) / totalCasos * 100).toFixed(1) : '0';
+  const graveRate = totalCasos ? (Number(resumo.graves) / totalCasos * 100).toFixed(2) : '0';
+  const topConcentracao = totalCasos && topEstado ? (Number(topEstado.casos) / totalCasos * 100).toFixed(1) : '0';
+  const top3 = fmt(Number(estados[0]?.casos || 0) + Number(estados[1]?.casos || 0) + Number(estados[2]?.casos || 0));
+
+  // Calcular tendência mensal e variação acumulada 2025 vs 2026
+  const mesAtualIdx = mensal.length - 1;
+  const mesAnteriorIdx = mesAtualIdx - 1;
+  const casosUltMes = mesAtualIdx >= 0 ? Number(mensal[mesAtualIdx].casos) : 0;
+  const casosAntMes = mesAnteriorIdx >= 0 ? Number(mensal[mesAnteriorIdx].casos) : 0;
+  const ultimoMesLabel = mesAtualIdx >= 0 ? (function(){ const d = new Date(mensal[mesAtualIdx].mes); return meses[d.getMonth()] + '/' + d.getFullYear(); })() : '--';
+
+  // Acumulado 2025 vs 2026 (Jan-Abr)
+  const acum25 = comparativo.filter(r => Number(r.ano) === 2025 && Number(r.mes) <= 4).reduce((s, r) => s + Number(r.casos), 0);
+  const acum26 = comparativo.filter(r => Number(r.ano) === 2026 && Number(r.mes) <= 4).reduce((s, r) => s + Number(r.casos), 0);
+
+  // ─── Mapbox insights (dengue) ───
+  const maxEstado = Number(estados[0]?.casos || 1);
+  document.getElementById('insights-mapbox').innerHTML =
+    '<h3>Insights — ' + filterLabel + '</h3>' +
+    '<div class="mini-kpi">' +
+      '<div class="mini-kpi-item"><div class="val">' + fmt(totalCasos) + '</div><div class="lbl">Casos</div></div>' +
+      '<div class="mini-kpi-item"><div class="val" style="color:#E31A1C">' + fmt(resumo.obitos) + '</div><div class="lbl">Obitos</div></div>' +
+      '<div class="mini-kpi-item"><div class="val" style="color:#FD8D3C">' + fmt(resumo.graves) + '</div><div class="lbl">Graves</div></div>' +
+    '</div>' +
+
+    // Variação acumulada
+    '<div class="insight-card" style="border-left-color:#9b59b6">' +
+      '<h4>Variacao acumulada (Jan-Abr)</h4>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div><span style="font-size:11px;color:#888">2025:</span> <b>' + fmt(acum25) + '</b></div>' +
+        '<div><span style="font-size:11px;color:#888">2026:</span> <b>' + fmt(acum26) + '</b></div>' +
+        trendBadge(acum26, acum25) +
+      '</div>' +
+    '</div>' +
+
+    // Tendência do mês atual
+    '<div class="insight-card">' +
+      '<h4>Tendencia do mes atual</h4>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div class="insight-value">' + fmt(casosUltMes) + '</div>' +
+        trendBadge(casosUltMes, casosAntMes) +
+      '</div>' +
+      '<p>' + ultimoMesLabel + ' vs mes anterior (' + fmt(casosAntMes) + ')</p>' +
+    '</div>' +
+
+    // Variação mês a mês
+    '<div class="insight-card warn">' +
+      '<h4>Variacao mes a mes</h4>' +
+      (mensal.length >= 2 ? (function() {
+        const last4 = mensal.slice(-4);
+        return last4.map((m, i) => {
+          const d = new Date(m.mes);
+          const label = meses[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
+          const prev = i > 0 ? Number(last4[i-1].casos) : (mensal.length > 4 ? Number(mensal[mensal.length - 5].casos) : 0);
+          return variationRow(label, Number(m.casos), prev, casosUltMes > casosAntMes ? casosUltMes : casosAntMes, '#e94560');
+        }).join('');
+      })() : '<p>Dados insuficientes</p>') +
+    '</div>' +
+
+    (topEstado ? '<div class="insight-card" style="border-left-color:#e67e22">' +
+      '<h4>Concentracao geografica</h4>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div class="insight-value">' + topConcentracao + '% em ' + topEstado.uf + '</div>' +
+      '</div>' +
+      '<p>Top 3 estados somam ' + top3 + ' casos</p>' +
+    '</div>' : '') +
+    '<div class="insight-card danger">' +
+      '<h4>Letalidade</h4>' +
+      '<div class="insight-value">' + letalidade + '%</div>' +
+      '<p>Hospitalizacao: ' + hospRate + '% (' + fmt(resumo.hospitalizacoes) + ')</p>' +
+    '</div>' +
+    '<h3 style="margin-top:16px">Top estados</h3>' +
+    estados.map(e => {
+      const pct = (Number(e.casos) / maxEstado * 100).toFixed(1);
+      return '<div class="mini-bar">' +
+        '<div class="mini-bar-label">' + e.uf + '</div>' +
+        '<div class="mini-bar-track"><div class="mini-bar-fill" style="width:' + pct + '%;background:#e94560">' +
+        fmt(e.casos) + '</div></div></div>';
+    }).join('');
+
+  // ─── Google insights (heatmap dengue) ───
+  const maxMensal = mensal.length ? Math.max(...mensal.map(m => Number(m.casos))) : 1;
+  document.getElementById('insights-google').innerHTML =
+    '<h3>Insights — ' + filterLabel + '</h3>' +
+    '<div class="mini-kpi">' +
+      '<div class="mini-kpi-item"><div class="val">' + fmt(totalCasos) + '</div><div class="lbl">Casos</div></div>' +
+      '<div class="mini-kpi-item"><div class="val" style="color:#FEB24C">' + fmt(resumo.com_alarme) + '</div><div class="lbl">C/ Alarme</div></div>' +
+      '<div class="mini-kpi-item"><div class="val" style="color:#51bbd6">' + fmt(resumo.municipios_afetados) + '</div><div class="lbl">Municipios</div></div>' +
+    '</div>' +
+    '<div class="insight-card">' +
+      '<h4>Tendencia do mes atual</h4>' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div class="insight-value">' + fmt(casosUltMes) + '</div>' +
+        trendBadge(casosUltMes, casosAntMes) +
+      '</div>' +
+      '<p>' + ultimoMesLabel + '</p>' +
+    '</div>' +
+    '<div class="insight-card">' +
+      '<h4>Casos graves</h4>' +
+      '<div class="insight-value">' + graveRate + '%</div>' +
+      '<p>' + fmt(resumo.graves) + ' dengue grave + ' + fmt(resumo.com_alarme) + ' com alarme</p>' +
+    '</div>' +
+    '<h3 style="margin-top:16px">Evolucao mensal</h3>' +
+    mensal.map((m, i) => {
+      const d = new Date(m.mes);
+      const label = meses[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
+      const pct = (Number(m.casos) / maxMensal * 100).toFixed(1);
+      const prev = i > 0 ? Number(mensal[i-1].casos) : 0;
+      const color = Number(m.casos) > maxMensal * 0.7 ? '#E31A1C'
+        : Number(m.casos) > maxMensal * 0.4 ? '#FD8D3C' : '#51bbd6';
+      return '<div class="mini-bar">' +
+        '<div class="mini-bar-label">' + label + '</div>' +
+        '<div class="mini-bar-track"><div class="mini-bar-fill" style="width:' + pct + '%;background:' + color + '">' +
+        fmt(m.casos) + '</div></div>' +
+        '<div style="width:50px;text-align:right">' + trendBadge(Number(m.casos), prev) + '</div>' +
+        '</div>';
+    }).join('');
+
+  // ─── Leaflet insights (estabelecimentos) ───
+  const maxTipo = Number(tipos[0]?.total || 1);
+  document.getElementById('insights-leaflet').innerHTML =
+    '<h3>Insights — ' + filterLabel + '</h3>' +
+    '<div class="mini-kpi">' +
+      '<div class="mini-kpi-item"><div class="val" style="color:#00d2ff">' + fmt(tipos.reduce((s, t) => s + Number(t.total), 0)) + '</div><div class="lbl">Ativos</div></div>' +
+      '<div class="mini-kpi-item"><div class="val">' + tipos.length + '</div><div class="lbl">Tipos</div></div>' +
+    '</div>' +
+    '<h3 style="margin-top:8px">Top tipos de unidade</h3>' +
+    tipos.map(t => {
+      const pct = (Number(t.total) / maxTipo * 100).toFixed(1);
+      const label = getTipoUnidade(t.tipo);
+      return '<div class="mini-bar">' +
+        '<div class="mini-bar-label" title="' + label + '">' + (label.length > 12 ? label.slice(0, 12) + '...' : label) + '</div>' +
+        '<div class="mini-bar-track"><div class="mini-bar-fill" style="width:' + pct + '%;background:#00d2ff">' +
+        fmt(t.total) + '</div></div></div>';
+    }).join('');
+  } catch (err) { console.error('loadInsights error:', err); }
+}
+
+// Carregar insights ao iniciar
+loadInsights();
+
+async function loadDashboard() {
+  if (dashboardLoaded) return;
+  dashboardLoaded = true;
+
+  const [resumo, mensal, estados, classif, idade, tipos, comparativo, casosUnidade] = await Promise.all([
+    fetch('/api/dashboard/resumo').then(r => r.json()),
+    fetch('/api/dashboard/mensal').then(r => r.json()),
+    fetch('/api/dashboard/top-estados').then(r => r.json()),
+    fetch('/api/dashboard/classificacao').then(r => r.json()),
+    fetch('/api/dashboard/faixa-etaria').then(r => r.json()),
+    fetch('/api/dashboard/tipos-estabelecimento').then(r => r.json()),
+    fetch('/api/dashboard/comparativo-anual').then(r => r.json()),
+    fetch('/api/dashboard/casos-por-unidade').then(r => r.json()),
+  ]);
+
+  const totalCasos = Number(resumo.total_casos);
+  const totalEstabs = tipos.reduce((s, t) => s + Number(t.total), 0);
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // Chart.js defaults
+  const chartDefaults = { responsive: true, maintainAspectRatio: false, animation: { duration: 800 } };
+  const fmtTooltip = (ctx) => ctx.dataset.label + ': ' + fmt(ctx.raw);
+
+  // ─── Totalizadores (barra superior) ───
+  document.getElementById('dash-totals').innerHTML =
+    '<div class="total-item accent"><div class="total-val">' + fmt(totalCasos) + '</div><div class="total-lbl">Total de casos</div></div>' +
+    '<div class="total-item warn"><div class="total-val">' + fmt(resumo.com_alarme) + '</div><div class="total-lbl">Com alarme</div></div>' +
+    '<div class="total-item danger"><div class="total-val">' + fmt(resumo.graves) + '</div><div class="total-lbl">Graves</div></div>' +
+    '<div class="total-item danger"><div class="total-val">' + fmt(resumo.obitos) + '</div><div class="total-lbl">Obitos</div></div>' +
+    '<div class="total-item"><div class="total-val">' + fmt(resumo.hospitalizacoes) + '</div><div class="total-lbl">Hospitalizacoes</div></div>' +
+    '<div class="total-item info"><div class="total-val">' + fmt(resumo.municipios_afetados) + '</div><div class="total-lbl">Municipios</div></div>' +
+    '<div class="total-item green"><div class="total-val">' + fmt(totalEstabs) + '</div><div class="total-lbl">Estab. ativos</div></div>';
+
+  // ─── Classificação dos casos (cards + barra proporcional) ───
+  const classifColors = {
+    dengue: '#3498db', dengue_com_alarme: '#e67e22',
+    dengue_grave: '#e74c3c', descartado: '#27ae60',
+    inconclusivo: '#95a5a6', sem_classificacao: '#bdc3c7',
+  };
+  const classifLabels = {
+    dengue: 'Dengue', dengue_com_alarme: 'Dengue c/ Alarme',
+    dengue_grave: 'Dengue Grave', descartado: 'Descartado',
+    inconclusivo: 'Inconclusivo', sem_classificacao: 'Sem Classificação',
+  };
+  const classifDesc = {
+    dengue: 'Caso confirmado de dengue sem sinais de gravidade',
+    dengue_com_alarme: 'Caso com sinais de alarme como dor abdominal, vomitos ou sangramento — risco de agravamento',
+    dengue_grave: 'Caso com complicacoes severas: choque, hemorragia grave ou comprometimento de orgaos',
+    descartado: 'Caso notificado mas descartado apos investigacao laboratorial ou clinica',
+    inconclusivo: 'Investigacao sem resultado conclusivo — exames ou dados insuficientes',
+    sem_classificacao: 'Caso ainda aguardando classificacao final pela vigilancia epidemiologica',
+  };
+
+  document.getElementById('dash-classif').innerHTML = classif.map(c => {
+    const color = classifColors[c.classificacao] || '#bdc3c7';
+    const label = classifLabels[c.classificacao] || c.classificacao;
+    const desc = classifDesc[c.classificacao] || '';
+    const pct = (Number(c.total) / totalCasos * 100).toFixed(1);
+    return '<div class="classif-card" style="border-left-color:' + color + '">' +
+      '<div class="cc-val">' + fmt(c.total) + '</div>' +
+      '<div class="cc-lbl">' + label + '</div>' +
+      '<div class="cc-desc" style="font-size:11px;color:#888;margin:4px 0 6px;line-height:1.4">' + desc + '</div>' +
+      '<div class="cc-pct">' + pct + '% do total</div></div>';
+  }).join('');
+
+  // Barra proporcional empilhada (HTML)
+  document.getElementById('chart-classif-bar').innerHTML =
+    '<div style="display:flex;height:28px;border-radius:6px;overflow:hidden">' +
+    classif.map(c => {
+      const color = classifColors[c.classificacao] || '#bdc3c7';
+      const pct = (Number(c.total) / totalCasos * 100);
+      if (pct < 1) return '';
+      return '<div style="width:' + pct + '%;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:600;cursor:pointer" title="' +
+        (classifLabels[c.classificacao] || c.classificacao) + ': ' + fmt(c.total) + ' (' + pct.toFixed(1) + '%)">' +
+        (pct > 5 ? pct.toFixed(0) + '%' : '') + '</div>';
+    }).join('') + '</div>' +
+    '<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">' +
+    classif.map(c => {
+      const color = classifColors[c.classificacao] || '#bdc3c7';
+      return '<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666">' +
+        '<div style="width:10px;height:10px;border-radius:2px;background:' + color + '"></div>' +
+        (classifLabels[c.classificacao] || c.classificacao) + '</div>';
+    }).join('') + '</div>';
+
+  // ═══ COMPARATIVO 2025 vs 2026 (Jan-Abr, lado a lado) ═══
+  const data2025 = Array(12).fill(0);
+  const data2026 = Array(12).fill(0);
+  comparativo.forEach(r => {
+    const m = Number(r.mes) - 1;
+    if (Number(r.ano) === 2025) data2025[m] = Number(r.casos);
+    if (Number(r.ano) === 2026) data2026[m] = Number(r.casos);
+  });
+  const comp25 = data2025.slice(0, 4);
+  const comp26 = data2026.slice(0, 4);
+  const total25 = comp25.reduce((a, b) => a + b, 0);
+  const total26 = comp26.reduce((a, b) => a + b, 0);
+  const diffPct = total25 > 0 ? ((total26 - total25) / total25 * 100).toFixed(0) : '0';
+
+  const ctxComp = document.getElementById('chart-comparativo').getContext('2d');
+  ctxComp.canvas.parentElement.style.height = '300px';
+  new Chart(ctxComp, {
+    type: 'bar',
+    data: {
+      labels: ['Jan', 'Fev', 'Mar', 'Abr'],
+      datasets: [
+        {
+          label: '2025 (' + fmt(total25) + ')',
+          data: comp25,
+          backgroundColor: 'rgba(52, 152, 219, 0.7)',
+          borderColor: '#3498db',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: '2026 (' + fmt(total26) + ')',
+          data: comp26,
+          backgroundColor: 'rgba(231, 76, 60, 0.7)',
+          borderColor: '#e74c3c',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: {
+            label: fmtTooltip,
+            afterBody: (items) => {
+              const v25 = items[0]?.raw || 0;
+              const v26 = items[1]?.raw || 0;
+              if (!v25) return '';
+              const pct = ((v26 - v25) / v25 * 100).toFixed(0);
+              return 'Variacao: ' + (pct > 0 ? '+' : '') + pct + '%';
+            },
+          },
+        },
+        legend: { position: 'top', labels: { font: { size: 11 } } },
+        subtitle: {
+          display: true,
+          text: 'Mesmo periodo: ' + (Number(diffPct) > 0 ? '+' : '') + diffPct + '%',
+          color: Number(diffPct) > 0 ? '#e74c3c' : '#27ae60',
+          font: { size: 12, weight: 'bold' },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+      },
+      interaction: { mode: 'index', intersect: false },
+    },
+  });
+
+  // ═══ EVOLUÇÃO MENSAL (Chart.js line + area fill) ═══
+  const mensalLabels = mensal.map(m => {
+    const d = new Date(m.mes);
+    return meses[d.getMonth()] + '/' + String(d.getFullYear()).slice(2);
+  });
+  const ctxMensal = document.getElementById('chart-mensal').getContext('2d');
+  ctxMensal.canvas.parentElement.style.height = '280px';
+  new Chart(ctxMensal, {
+    type: 'line',
+    data: {
+      labels: mensalLabels,
+      datasets: [{
+        label: 'Casos',
+        data: mensal.map(m => Number(m.casos)),
+        borderColor: '#e94560',
+        backgroundColor: 'rgba(233, 69, 96, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: '#e94560',
+      }, {
+        label: 'Graves',
+        data: mensal.map(m => Number(m.graves)),
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        borderDash: [5, 3],
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: fmtTooltip } },
+        legend: { labels: { font: { size: 11 } } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+      },
+      interaction: { mode: 'index', intersect: false },
+    },
+  });
+
+  // ═══ CLASSIFICAÇÃO (Chart.js doughnut) ═══
+  const ctxDonut = document.getElementById('chart-classif-donut').getContext('2d');
+  ctxDonut.canvas.parentElement.style.height = '280px';
+  new Chart(ctxDonut, {
+    type: 'doughnut',
+    data: {
+      labels: classif.map(c => classifLabels[c.classificacao] || c.classificacao),
+      datasets: [{
+        data: classif.map(c => Number(c.total)),
+        backgroundColor: classif.map(c => classifColors[c.classificacao] || '#bdc3c7'),
+        borderWidth: 2,
+        borderColor: '#fff',
+        hoverOffset: 8,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      cutout: '55%',
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = (ctx.raw / totalCasos * 100).toFixed(1);
+              return ctx.label + ': ' + fmt(ctx.raw) + ' (' + pct + '%)';
+            },
+          },
+        },
+        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
+      },
+    },
+  });
+
+  // ═══ TOP ESTADOS (Chart.js horizontal bar) ═══
+  const ctxEstados = document.getElementById('chart-estados').getContext('2d');
+  ctxEstados.canvas.parentElement.style.height = '300px';
+  new Chart(ctxEstados, {
+    type: 'bar',
+    data: {
+      labels: estados.map(e => e.uf),
+      datasets: [{
+        label: 'Casos',
+        data: estados.map(e => Number(e.casos)),
+        backgroundColor: estados.map((_, i) => i < 3 ? 'rgba(233, 69, 96, 0.8)' : 'rgba(233, 69, 96, 0.4)'),
+        borderColor: '#e94560',
+        borderWidth: 1,
+        borderRadius: 4,
+      }, {
+        label: 'Óbitos',
+        data: estados.map(e => Number(e.obitos)),
+        backgroundColor: 'rgba(231, 76, 60, 0.9)',
+        borderColor: '#c0392b',
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      indexAxis: 'y',
+      plugins: {
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: fmtTooltip } },
+        legend: { labels: { font: { size: 11 } } },
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+      },
+    },
+  });
+
+  // ═══ FAIXA ETÁRIA (Chart.js vertical bar) ═══
+  const idadeColors = ['#3498db','#2ecc71','#e67e22','#e74c3c','#9b59b6','#1abc9c','#f39c12','#e94560','#00d2ff','#555'];
+  const ctxIdade = document.getElementById('chart-idade').getContext('2d');
+  ctxIdade.canvas.parentElement.style.height = '280px';
+  new Chart(ctxIdade, {
+    type: 'bar',
+    data: {
+      labels: idade.map(i => i.faixa + ' anos'),
+      datasets: [{
+        label: 'Casos',
+        data: idade.map(i => Number(i.total)),
+        backgroundColor: idade.map((_, i) => idadeColors[i % idadeColors.length] + 'cc'),
+        borderColor: idade.map((_, i) => idadeColors[i % idadeColors.length]),
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        tooltip: { callbacks: { label: fmtTooltip } },
+        legend: { display: false },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+        x: { ticks: { font: { size: 10 } } },
+      },
+    },
+  });
+
+  // ═══ ESTABELECIMENTOS POR TIPO (horizontal bar) ═══
+  const tipoColors = ['#27ae60','#2ecc71','#1abc9c','#16a085','#3498db','#2980b9','#9b59b6','#8e44ad','#e67e22','#d35400'];
+  const ctxTipos = document.getElementById('chart-tipos').getContext('2d');
+  ctxTipos.canvas.parentElement.style.height = '300px';
+  new Chart(ctxTipos, {
+    type: 'bar',
+    data: {
+      labels: tipos.map(t => getTipoUnidade(t.tipo)),
+      datasets: [{
+        label: 'Estabelecimentos ativos',
+        data: tipos.map(t => Number(t.total)),
+        backgroundColor: tipoColors.map(c => c + 'bb'),
+        borderColor: tipoColors,
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      indexAxis: 'y',
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => fmt(ctx.raw) + ' (' + (ctx.raw / totalEstabs * 100).toFixed(1) + '%)',
+          },
+        },
+        legend: { display: false },
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+        y: { ticks: { font: { size: 10 } } },
+      },
+    },
+  });
+
+  // ═══ HOSPITALIZAÇÕES E ÓBITOS POR MÊS (Chart.js stacked bar) ═══
+  const ctxHosp = document.getElementById('chart-hosp-obitos').getContext('2d');
+  ctxHosp.canvas.parentElement.style.height = '320px';
+  new Chart(ctxHosp, {
+    type: 'bar',
+    data: {
+      labels: mensalLabels,
+      datasets: [{
+        label: 'Hospitalizacoes',
+        data: mensal.map(m => Number(m.hospitalizacoes)),
+        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+        borderColor: '#3498db',
+        borderWidth: 1,
+        borderRadius: 3,
+      }, {
+        label: 'Óbitos',
+        data: mensal.map(m => Number(m.obitos)),
+        backgroundColor: 'rgba(231, 76, 60, 0.8)',
+        borderColor: '#e74c3c',
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      plugins: {
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: fmtTooltip } },
+        legend: { labels: { font: { size: 11 } } },
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true, ticks: { callback: v => v >= 1000 ? (v/1000) + 'k' : v } },
+      },
+      interaction: { mode: 'index', intersect: false },
+    },
+  });
+
+  // ═══ CASOS POR TIPO DE UNIDADE NOTIFICADORA (doughnut) ═══
+  const unidadeColors = ['#e94560','#3498db','#e67e22','#2ecc71','#9b59b6','#1abc9c','#f39c12','#d35400','#2980b9','#8e44ad'];
+  const totalCasosUnidade = casosUnidade.reduce((s, u) => s + Number(u.casos), 0);
+  const ctxCasosUni = document.getElementById('chart-casos-unidade').getContext('2d');
+  ctxCasosUni.canvas.parentElement.style.height = '300px';
+  new Chart(ctxCasosUni, {
+    type: 'doughnut',
+    data: {
+      labels: casosUnidade.map(u => getTipoUnidade(u.tipo)),
+      datasets: [{
+        data: casosUnidade.map(u => Number(u.casos)),
+        backgroundColor: unidadeColors.map(c => c + 'cc'),
+        borderColor: '#fff',
+        borderWidth: 2,
+        hoverOffset: 8,
+      }],
+    },
+    options: {
+      ...chartDefaults,
+      cutout: '50%',
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = (ctx.raw / totalCasosUnidade * 100).toFixed(1);
+              return ctx.label + ': ' + fmt(ctx.raw) + ' (' + pct + '%)';
+            },
+          },
+        },
+        legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 10, padding: 6 } },
+      },
+    },
+  });
+}
+
+// ═══════════════════════════════════════
+// MAPBOX
+// ═══════════════════════════════════════
+mapboxgl.accessToken = MAPBOX_TOKEN;
+
+const map = new mapboxgl.Map({
+  container: 'map-mapbox',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: [-51.925, -14.235],
+  zoom: 4,
+});
+
+map.addControl(new mapboxgl.NavigationControl());
+
+let mapClicksRegistered = false;
+map.on('load', () => loadDengue());
+
+async function loadDengue() {
+  const uf = currentUf ? '?uf=' + currentUf : '';
+
+  // Fetch tudo em paralelo
+  const qs = filterQs();
+  const geoUrl = currentUf ? '/api/geo/municipios/' + currentUf : '/api/geo/estados';
+  const [dengueRes, geoRes, casosRes] = await Promise.all([
+    fetch('/api/dengue/pontos' + uf).then(r => r.json()),
+    fetch(geoUrl).then(r => r.json()).catch(() => null),
+    fetch('/api/dashboard/mapa-estados' + qs).then(r => r.json()).catch(() => []),
+  ]);
+
+  let validPoints = dengueRes.filter((d) => {
+    const lat = Number(d.lat), lon = Number(d.lon);
+    return isFinite(lat) && isFinite(lon) && lat !== 0 && lon !== 0;
+  });
+
+  if (currentRegiao && regiaoGeoJson) {
+    validPoints = filterByRegiao(validPoints, 'lat', 'lon');
+  }
+
+  const points = validPoints.map((d) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [Number(d.lon), Number(d.lat)] },
+    properties: { casos: Number(d.casos) },
+  }));
+
+  const geojson = { type: 'FeatureCollection', features: points };
+
+  // Remover todas as layers e sources
+  ['cluster-count', 'clusters', 'single-point', 'regiao-fill', 'regiao-line', 'geo-fill', 'geo-line']
+    .forEach((id) => { try { if (map.getLayer(id)) map.removeLayer(id); } catch(e){} });
+  ['dengue', 'geo', 'regiao']
+    .forEach((id) => { try { if (map.getSource(id)) map.removeSource(id); } catch(e){} });
+
+  // 1) GEO layers primeiro (ficam no fundo)
+  if (geoRes && geoRes.features) {
+    const casosLookup = {};
+    casosRes.forEach(e => { casosLookup[e.uf] = Number(e.casos); });
+    const maxCasos = Math.max(...Object.values(casosLookup), 1);
+
+    geoRes.features.forEach(f => {
+      const uf = f.properties.state || f.properties.state_abbr;
+      f.properties.casos = casosLookup[uf] || 0;
+    });
+
+    map.addSource('geo', { type: 'geojson', data: geoRes });
+    map.addLayer({
+      id: 'geo-fill', type: 'fill', source: 'geo',
+      paint: {
+        'fill-color': [
+          'interpolate', ['linear'], ['get', 'casos'],
+          0, 'rgba(200,230,200,0.15)',
+          maxCasos * 0.05, 'rgba(255,255,178,0.25)',
+          maxCasos * 0.15, 'rgba(254,204,92,0.3)',
+          maxCasos * 0.3, 'rgba(253,141,60,0.35)',
+          maxCasos * 0.5, 'rgba(240,59,32,0.4)',
+          maxCasos * 0.7, 'rgba(189,0,38,0.45)',
+          maxCasos, 'rgba(128,0,38,0.5)',
+        ],
+        'fill-opacity': 0.6,
+      },
+    });
+    map.addLayer({
+      id: 'geo-line', type: 'line', source: 'geo',
+      paint: { 'line-color': '#e94560', 'line-width': 1.5, 'line-opacity': 0.6 },
+    });
+
+    if (currentUf && geoRes.features.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      geoRes.features.forEach((f) => {
+        const coords = f.geometry.coordinates.flat(3);
+        for (let i = 0; i < coords.length; i += 2) {
+          if (isFinite(coords[i]) && isFinite(coords[i + 1])) bounds.extend([coords[i], coords[i + 1]]);
+        }
+      });
+      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40 });
+    }
+  }
+
+  // 2) Região outline (Turf.js)
+  if (currentRegiao && regiaoGeoJson && regiaoGeoJson.features) {
+    map.addSource('regiao', { type: 'geojson', data: regiaoGeoJson });
+    map.addLayer({
+      id: 'regiao-fill', type: 'fill', source: 'regiao',
+      paint: { 'fill-color': '#FFD700', 'fill-opacity': 0.05 },
+    });
+    map.addLayer({
+      id: 'regiao-line', type: 'line', source: 'regiao',
+      paint: { 'line-color': '#FFD700', 'line-width': 2, 'line-dasharray': [3, 2] },
+    });
+
+    const bounds = new mapboxgl.LngLatBounds();
+    regiaoGeoJson.features.forEach((f) => {
+      const coords = f.geometry.coordinates.flat(3);
+      for (let i = 0; i < coords.length; i += 2) {
+        if (isFinite(coords[i]) && isFinite(coords[i + 1])) bounds.extend([coords[i], coords[i + 1]]);
+      }
+    });
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40 });
+  }
+
+  // 3) Clusters por cima de tudo
+  map.addSource('dengue', {
+    type: 'geojson', data: geojson, cluster: true,
+    clusterMaxZoom: 14, clusterRadius: 50,
+    clusterProperties: { totalCasos: ['+', ['get', 'casos']] },
+  });
+
+  map.addLayer({
+    id: 'clusters', type: 'circle', source: 'dengue',
+    filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': [
+        'step', ['get', 'totalCasos'],
+        '#51bbd6', 50, '#f1f075', 200, '#FEB24C',
+        1000, '#FD8D3C', 5000, '#FC4E2A', 20000, '#E31A1C', 100000, '#800026',
+      ],
+      'circle-radius': [
+        'step', ['get', 'point_count'], 18, 5, 22, 20, 28, 50, 34, 100, 40,
+      ],
+      'circle-stroke-width': 2, 'circle-stroke-color': '#fff',
+      'circle-stroke-opacity': 0.4, 'circle-opacity': 0.85,
+    },
+  });
+
+  map.addLayer({
+    id: 'cluster-count', type: 'symbol', source: 'dengue',
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': [
+        'case',
+        ['>=', ['get', 'totalCasos'], 1000000],
+        ['concat', ['to-string', ['/', ['round', ['/', ['get', 'totalCasos'], 100000]], 10]], 'M'],
+        ['>=', ['get', 'totalCasos'], 1000],
+        ['concat', ['to-string', ['/', ['round', ['/', ['get', 'totalCasos'], 100]], 10]], 'k'],
+        ['to-string', ['get', 'totalCasos']],
+      ],
+      'text-size': 12,
+      'text-font': ['DIN Pro Medium', 'Arial Unicode MS Bold'],
+    },
+    paint: { 'text-color': '#111', 'text-halo-color': '#fff', 'text-halo-width': 2 },
+  });
+
+  map.addLayer({
+    id: 'single-point', type: 'circle', source: 'dengue',
+    filter: ['!', ['has', 'point_count']],
+    paint: {
+      'circle-color': '#e94560',
+      'circle-radius': ['interpolate', ['linear'], ['get', 'casos'], 1, 5, 50, 8, 200, 12, 1000, 18],
+      'circle-stroke-width': 1, 'circle-stroke-color': '#fff', 'circle-opacity': 0.85,
+    },
+  });
+
+  // Registrar event handlers apenas uma vez
+  if (!mapClicksRegistered) {
+    mapClicksRegistered = true;
+
+    map.on('click', 'clusters', (e) => {
+      const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0];
+      map.getSource('dengue').getClusterExpansionZoom(feature.properties.cluster_id, (err, zoom) => {
+        if (!err) map.easeTo({ center: feature.geometry.coordinates, zoom });
+      });
+    });
+
+    map.on('click', 'single-point', (e) => {
+      const f = e.features[0];
+      const casos = Number(f.properties.casos).toLocaleString('pt-BR');
+      new mapboxgl.Popup({ offset: 10 })
+        .setLngLat(f.geometry.coordinates)
+        .setHTML('<div style="font-family:sans-serif;font-size:13px;color:#333"><b>' + casos + ' casos</b></div>')
+        .addTo(map);
+    });
+
+    map.on('click', 'geo-fill', (e) => {
+      if (map.queryRenderedFeatures(e.point, { layers: ['clusters','single-point'] }).length) return;
+      const f = e.features[0];
+      const name = f.properties.name || f.properties.state || '--';
+      const casos = Number(f.properties.casos || 0);
+      new mapboxgl.Popup({ offset: 10 })
+        .setLngLat(e.lngLat)
+        .setHTML('<div style="font-family:sans-serif;font-size:13px;color:#333">' +
+          '<b>' + name + '</b><br>' +
+          '<span style="color:#e94560;font-weight:700">' + fmt(casos) + '</span> casos de dengue</div>')
+        .addTo(map);
+    });
+
+    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'single-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'single-point', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'geo-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'geo-fill', () => { map.getCanvas().style.cursor = ''; });
+  }
+}
+
+// ─── UF filter ───
+document.getElementById('uf-select').addEventListener('change', () => {
+  currentUf = document.getElementById('uf-select').value;
+  if (!currentUf) map.flyTo({ center: [-51.925, -14.235], zoom: 4 });
+  loadDengue();
+  if (leafletInitialized) {
+    if (!currentUf) leafletMap.setView([-14.235, -51.925], 4);
+    loadEstabelecimentos();
+  }
+  if (googleInitialized) {
+    if (!currentUf) { googleMap.setCenter({ lat: -14.235, lng: -51.925 }); googleMap.setZoom(4); }
+    loadGoogleData();
+  }
+  loadInsights();
+});
+
+// ─── Região filter (Turf.js) ───
+document.getElementById('regiao-select').addEventListener('change', async () => {
+  currentRegiao = document.getElementById('regiao-select').value;
+  regiaoGeoJson = null;
+  if (currentRegiao) {
+    try {
+      const res = await fetch('/api/geo/regiao/' + currentRegiao);
+      regiaoGeoJson = await res.json();
+    } catch (err) { console.warn('Erro ao carregar região:', err); }
+  }
+  if (!currentRegiao) map.flyTo({ center: [-51.925, -14.235], zoom: 4 });
+  loadDengue();
+  if (leafletInitialized) {
+    if (!currentRegiao) leafletMap.setView([-14.235, -51.925], 4);
+    loadEstabelecimentos();
+  }
+  loadInsights();
+});
+
+// ─── Período filter ───
+document.getElementById('periodo-select').addEventListener('change', () => {
+  currentPeriodo = document.getElementById('periodo-select').value;
+  loadDengue();
+  if (leafletInitialized) loadEstabelecimentos();
+  if (googleInitialized) loadGoogleData();
+  loadInsights();
+});
+
+function filterByRegiao(items, latKey, lonKey) {
+  if (!regiaoGeoJson || !regiaoGeoJson.features || regiaoGeoJson.features.length === 0) return items;
+  const regionFeatures = regiaoGeoJson.features;
+  return items.filter((item) => {
+    const lon = Number(item[lonKey]), lat = Number(item[latKey]);
+    if (!isFinite(lat) || !isFinite(lon)) return false;
+    const pt = turf.point([lon, lat]);
+    return regionFeatures.some((feature) => {
+      try { return turf.booleanPointInPolygon(pt, feature); } catch (e) { return false; }
+    });
+  });
+}
+
+// ═══════════════════════════════════════
+// OPENSTREETMAP / LEAFLET
+// ═══════════════════════════════════════
+let leafletMap = null;
+let leafletLayers = [];
+let leafletInitialized = false;
+
+function initLeaflet() {
+  if (leafletInitialized) return;
+  leafletMap = L.map('map-leaflet').setView([-14.235, -51.925], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(leafletMap);
+  leafletInitialized = true;
+  loadEstabelecimentos();
+}
+
+function clearLeaflet() {
+  leafletLayers.forEach((l) => leafletMap.removeLayer(l));
+  leafletLayers = [];
+}
+
+async function loadEstabelecimentos() {
+  const uf = currentUf ? '?uf=' + currentUf : '';
+  const res = await fetch('/api/estabelecimentos' + uf);
+  const raw = await res.json();
+
+  let estabs = raw.filter((e) => {
+    const lat = Number(e.lat), lon = Number(e.lon);
+    return isFinite(lat) && isFinite(lon) && lat !== 0 && lon !== 0;
+  });
+
+  if (currentRegiao && regiaoGeoJson) {
+    estabs = filterByRegiao(estabs, 'lat', 'lon');
+  }
+
+  clearLeaflet();
+
+  if (currentRegiao && regiaoGeoJson && regiaoGeoJson.features) {
+    const regiaoLayer = L.geoJSON(regiaoGeoJson, {
+      interactive: false,
+      style: { color: '#FFD700', weight: 2.5, dashArray: '6 4', fillColor: '#FFD700', fillOpacity: 0.05 },
+    }).addTo(leafletMap);
+    regiaoLayer.bringToBack();
+    leafletLayers.push(regiaoLayer);
+    if (regiaoLayer.getBounds().isValid()) leafletMap.fitBounds(regiaoLayer.getBounds(), { padding: [20, 20] });
+  }
+
+  const cluster = L.markerClusterGroup({
+    maxClusterRadius: 50, disableClusteringAtZoom: 15,
+    spiderfyOnMaxZoom: true, showCoverageOnHover: false, chunkedLoading: true,
+    iconCreateFunction: function (c) {
+      const count = c.getChildCount();
+      let size = count > 100 ? 'large' : count > 20 ? 'medium' : 'small';
+      return L.divIcon({
+        html: '<div><span>' + count + '</span></div>',
+        className: 'marker-cluster marker-cluster-' + size,
+        iconSize: L.point(40, 40),
+      });
+    },
+  });
+
+  estabs.forEach((e) => {
+    const marker = L.circleMarker([Number(e.lat), Number(e.lon)], {
+      radius: 6, color: '#00d2ff', fillColor: '#00d2ff', fillOpacity: 0.8, weight: 2,
+    });
+    marker.bindPopup(
+      '<div style="font-family:sans-serif;font-size:13px">' +
+      '<b>' + e.nome + '</b><br>CNES: ' + e.co_cnes + '<br>Tipo: ' + getTipoUnidade(e.tp_unidade) + '</div>'
+    );
+    cluster.addLayer(marker);
+  });
+
+  leafletMap.addLayer(cluster);
+  leafletLayers.push(cluster);
+  loadLeafletGeo();
+}
+
+async function loadLeafletGeo() {
+  try {
+    const url = currentUf ? '/api/geo/municipios/' + currentUf : '/api/geo/estados';
+    const res = await fetch(url);
+    const geo = await res.json();
+    if (!geo || !geo.features) return;
+    const geoLayer = L.geoJSON(geo, {
+      interactive: false,
+      style: { color: '#e94560', weight: 1.5, fillColor: '#3498db', fillOpacity: 0.05 },
+    }).addTo(leafletMap);
+    geoLayer.bringToBack();
+    leafletLayers.push(geoLayer);
+    if (currentUf && geoLayer.getBounds().isValid()) leafletMap.fitBounds(geoLayer.getBounds());
+  } catch (err) { console.warn('Geo Leaflet não carregou:', err); }
+}
+
+// ═══════════════════════════════════════
+// GOOGLE MAPS
+// ═══════════════════════════════════════
+let googleMap = null;
+let googleHeat = null;
+let googleGeoFeatures = [];
+let googleInitialized = false;
+let googleInfoWindow = null;
+
+function initGoogle() {
+  if (googleInitialized) return;
+  const script = document.createElement('script');
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_KEY + '&libraries=visualization&callback=onGoogleReady';
+  script.async = true;
+  document.head.appendChild(script);
+}
+
+window.onGoogleReady = function () {
+  googleMap = new google.maps.Map(document.getElementById('map-google'), {
+    center: { lat: -14.235, lng: -51.925 }, zoom: 4, mapTypeId: 'roadmap',
+  });
+  googleInitialized = true;
+  loadGoogleData();
+};
+
+async function loadGoogleData() {
+  if (!googleMap || !googleInitialized) return;
+  if (googleHeat) googleHeat.setMap(null);
+  googleGeoFeatures.forEach((f) => googleMap.data.remove(f));
+  googleGeoFeatures = [];
+
+  const uf = currentUf ? '?uf=' + currentUf : '';
+  const res = await fetch('/api/dengue/pontos' + uf);
+  const raw = await res.json();
+
+  const points = raw
+    .filter((d) => {
+      const lat = Number(d.lat), lon = Number(d.lon);
+      return isFinite(lat) && isFinite(lon) && lat !== 0 && lon !== 0;
+    })
+    .map((d) => ({
+      location: new google.maps.LatLng(Number(d.lat), Number(d.lon)),
+      weight: Math.min(Number(d.casos), 500),
+    }));
+
+  googleHeat = new google.maps.visualization.HeatmapLayer({
+    data: points, map: googleMap, radius: 25, opacity: 0.75,
+    gradient: [
+      'rgba(0,0,0,0)', 'rgba(255,255,178,0.6)', 'rgba(254,204,92,0.7)',
+      'rgba(253,141,60,0.8)', 'rgba(240,59,32,0.9)', 'rgba(189,0,38,1)',
+    ],
+  });
+  loadGoogleGeo();
+}
+
+async function loadGoogleGeo() {
+  try {
+    const url = currentUf ? '/api/geo/municipios/' + currentUf : '/api/geo/estados';
+    const res = await fetch(url);
+    const geo = await res.json();
+    if (!geo || !geo.features) return;
+
+    googleGeoFeatures = googleMap.data.addGeoJson(geo);
+    googleMap.data.setStyle({
+      strokeColor: '#e94560', strokeWeight: 1.5, fillColor: 'transparent', fillOpacity: 0,
+    });
+
+    if (!googleInfoWindow) googleInfoWindow = new google.maps.InfoWindow();
+
+    googleMap.data.addListener('click', (event) => {
+      const p = event.feature;
+      const name = p.getProperty('name') || p.getProperty('state');
+      const info = p.getProperty('name')
+        ? '<b>' + name + '</b> — ' + p.getProperty('state') + '<br>IBGE: ' + p.getProperty('ibge_code')
+        : '<b>Estado: ' + name + '</b><br>Municípios: ' + p.getProperty('municipios');
+      googleInfoWindow.setContent('<div style="font-family:sans-serif;font-size:13px;color:#333">' + info + '</div>');
+      googleInfoWindow.setPosition(event.latLng);
+      googleInfoWindow.open(googleMap);
+    });
+
+    if (currentUf && geo.features.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      geo.features.forEach((f) => {
+        const coords = f.geometry.coordinates.flat(3);
+        for (let i = 0; i < coords.length; i += 2) {
+          if (isFinite(coords[i]) && isFinite(coords[i + 1])) bounds.extend({ lat: coords[i + 1], lng: coords[i] });
+        }
+      });
+      googleMap.fitBounds(bounds);
+    }
+  } catch (err) { console.warn('Geo Google não carregou:', err); }
+}
+
+// ─── Tabs ───
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const p = tab.dataset.provider;
+    currentProvider = p;
+    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.map-panel').forEach((el) => el.classList.remove('active'));
+    document.getElementById('panel-' + p).classList.add('active');
+
+    // Mostrar/esconder filtros conforme a aba
+    const showFilters = p !== 'dashboard';
+    document.getElementById('filter-onde').style.display = showFilters ? '' : 'none';
+    document.getElementById('filter-quando').style.display = showFilters ? '' : 'none';
+
+    if (p === 'dashboard') loadDashboard();
+    if (p === 'mapbox') setTimeout(() => map.resize(), 100);
+    if (p === 'leaflet') { initLeaflet(); setTimeout(() => leafletMap.invalidateSize(), 100); }
+    if (p === 'google') initGoogle();
+  });
+});
+</script>
+
+</body>
+</html>

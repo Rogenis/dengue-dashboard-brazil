@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Datasets (arquivos grandes, baixar separadamente)
+datasets/*.csv
+datasets/*.dbf
+datasets/*.shp
+datasets/*.shx
+datasets/*.prj
+datasets/*.pdf
+
+# Word docs
+datasets_word/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
