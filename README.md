@@ -1,4 +1,4 @@
-# Prix Onboarding — Dashboard de Dengue
+# Dashboard de Dengue
 
 Dashboard interativo para visualizacao e analise de dados de dengue no Brasil, com mapas (Mapbox, Leaflet, Google Maps), graficos interativos (Chart.js) e insights em tempo real.
 
@@ -11,7 +11,7 @@ Dashboard interativo para visualizacao e analise de dados de dengue no Brasil, c
 
 ## Datasets
 
-Os arquivos de dados nao estao no repositorio (sao grandes). Baixe e coloque na pasta `datasets/`:
+Os arquivos de dados nao estao no repositorio. Precisam ser baixados e colocados na pasta `datasets/`:
 
 | Arquivo | Descricao | Tamanho |
 |---------|-----------|---------|
@@ -53,16 +53,16 @@ Variaveis de ambiente (opcionais — valores default funcionam para desenvolvime
 ```bash
 # ClickHouse
 CLICKHOUSE_URL=http://localhost:8123
-CLICKHOUSE_DB=prix_onboarding_db
+CLICKHOUSE_DB=db
 CLICKHOUSE_USER=default
 CLICKHOUSE_PASSWORD=
 
 # PostgreSQL
 PG_HOST=localhost
 PG_PORT=5433
-PG_DATABASE=prix_onboarding_db
-PG_USER=postgres
-PG_PASSWORD=postgres
+PG_DATABASE=db
+PG_USER=user
+PG_PASSWORD=password
 ```
 
 ## Executando
